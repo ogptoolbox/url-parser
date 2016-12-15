@@ -1,6 +1,6 @@
 module UrlParser exposing
   ( Parser, string, int, s
-  , (</>), map, oneOf, top, custom
+  , (</>), map, oneOf, remaining, top, custom
   , QueryParser, (<?>), stringParam, intParam, customParam
   , parsePath, parseHash
   )
@@ -225,6 +225,39 @@ oneOf : List (Parser a b) -> Parser a b
 oneOf parsers =
   Parser <| \state ->
     List.concatMap (\(Parser parser) -> parser state) parsers
+
+
+{-| A parser that consumes every remaining path segments.
+
+    type BlogRoute = Overview | Post Int | NotFound (List String)
+
+    blogRoute : Parser (BlogRoute -> a) a
+    blogRoute =
+      oneOf
+        [ map Overview top
+        , map Post (s "post" </> int)
+        , map NotFound remaining
+        ]
+
+    parsePath (s "blog" </> blogRoute) location
+    -- /blog/         ==>  Just Overview
+    -- /blog/post/42  ==>  Just (Post 42)
+    -- /blog/post/forty-two  ==>  Just (NotFound ["post", "forty-two"])
+    -- /blog/delete  ==>  Just (NotFound ["delete"])
+-}
+remaining : Parser (List String -> a) a
+remaining =
+  Parser <|
+    \{ visited, unvisited, params, value } ->
+      if List.isEmpty unvisited then
+        []
+      else
+        [ State
+            (List.append (List.reverse unvisited) visited)
+            []
+            params
+            (value unvisited)
+        ]
 
 
 {-| A parser that does not consume any path segments.
